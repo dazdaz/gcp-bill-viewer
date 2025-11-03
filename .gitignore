@@ -32,3 +32,21 @@ Thumbs.db
 # Sensitive files (auto-detected)
 gcpbill.log
 
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+env/
+
+# Data files
+data/
+
