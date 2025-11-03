@@ -1,0 +1,502 @@
+#!/bin/bash
+
+# GCP Bill - Google Cloud Platform Billing Tool
+# This script helps manage and analyze GCP billing data with date ranges
+
+set -e
+
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DATA_DIR="${SCRIPT_DIR}/data"
+LOG_FILE="${SCRIPT_DIR}/gcpbill.log"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Default date range (last 30 days)
+DEFAULT_START_DATE=$(date -v-30d '+%Y-%m-%d' 2>/dev/null || date -d '30 days ago' '+%Y-%m-%d' 2>/dev/null || echo "2024-01-01")
+DEFAULT_END_DATE=$(date '+%Y-%m-%d')
+
+# Logging function
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
+}
+
+# Error handling
+error_exit() {
+    echo -e "${RED}ERROR: $1${NC}" >&2
+    log "ERROR: $1"
+    exit 1
+}
+
+# Info message
+info() {
+    echo -e "${BLUE}INFO: $1${NC}"
+    log "INFO: $1"
+}
+
+# Success message
+success() {
+    echo -e "${GREEN}SUCCESS: $1${NC}"
+    log "SUCCESS: $1"
+}
+
+# Warning message
+warning() {
+    echo -e "${YELLOW}WARNING: $1${NC}"
+    log "WARNING: $1"
+}
+
+# Create necessary directories
+setup_directories() {
+    mkdir -p "$DATA_DIR"
+}
+
+# Validate date format and range
+validate_dates() {
+    local start_date="$1"
+    local end_date="$2"
+    
+    # Check date format (YYYY-MM-DD)
+    if [[ ! "$start_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        error_exit "Invalid start date format: $start_date. Use YYYY-MM-DD format."
+    fi
+    
+    if [[ ! "$end_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        error_exit "Invalid end date format: $end_date. Use YYYY-MM-DD format."
+    fi
+    
+    # Test if dates are valid by trying to format them back
+    local start_formatted=$(date -j -f '%Y-%m-%d' "$start_date" '+%Y-%m-%d' 2>/dev/null || echo "")
+    local end_formatted=$(date -j -f '%Y-%m-%d' "$end_date" '+%Y-%m-%d' 2>/dev/null || echo "")
+    
+    if [[ "$start_formatted" != "$start_date" ]]; then
+        error_exit "Invalid start date: $start_date. This is not a valid calendar date."
+    fi
+    
+    if [[ "$end_formatted" != "$end_date" ]]; then
+        error_exit "Invalid end date: $end_date. This is not a valid calendar date."
+    fi
+    
+    # Convert dates to timestamps for comparison
+    local start_timestamp=$(date -j -f '%Y-%m-%d' "$start_date" '+%s' 2>/dev/null || echo "0")
+    local end_timestamp=$(date -j -f '%Y-%m-%d' "$end_date" '+%s' 2>/dev/null || echo "0")
+    
+    if [[ "$start_timestamp" -gt "$end_timestamp" ]]; then
+        error_exit "Start date ($start_date) cannot be after end date ($end_date). Please check your date range."
+    fi
+    
+    return 0
+}
+
+# Parse command line arguments
+parse_args() {
+    START_DATE="${DEFAULT_START_DATE}"
+    END_DATE="${DEFAULT_END_DATE}"
+    BILLING_ACCOUNT_ID=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --list-accounts)
+                ACTION="list_accounts"
+                shift
+                ;;
+            --billing-account)
+                BILLING_ACCOUNT_ID="$2"
+                # If billing account is specified, assume list accounts action
+                ACTION="${ACTION:-list_accounts}"
+                shift 2
+                ;;
+            --start-date)
+                START_DATE="$2"
+                # If start date is specified, assume list accounts action
+                ACTION="${ACTION:-list_accounts}"
+                shift 2
+                ;;
+            --end-date)
+                END_DATE="$2"
+                # If end date is specified, assume list accounts action
+                ACTION="${ACTION:-list_accounts}"
+                shift 2
+                ;;
+            --help|-h)
+                ACTION="help"
+                shift
+                ;;
+            *)
+                echo -e "${RED}Unknown option: $1${NC}"
+                ACTION="help"
+                shift
+                ;;
+        esac
+    done
+    
+    # Set default action if none specified
+    ACTION="${ACTION:-help}"
+}
+
+# Check if Billing API is enabled
+check_billing_api() {
+    local api_enabled=false
+    
+    # Check if billing API is enabled for at least one project
+    while IFS= read -r account; do
+        if [[ -n "$account" ]]; then
+            if gcloud config set account "$account" &>/dev/null; then
+                # Use the correct format to check for billing-enabled projects
+                local billing_projects
+                billing_projects=$(gcloud projects list --format="csv[no-heading](projectId,billingEnabled)" 2>/dev/null | grep -v ',$' || echo "")
+                
+                if [[ -n "$billing_projects" ]]; then
+                    # Check if any project has billing enabled
+                    while IFS= read -r line; do
+                        if [[ -n "$line" && "$line" == *"true"* ]]; then
+                            api_enabled=true
+                            break
+                        fi
+                    done <<< "$billing_projects"
+                fi
+                
+                if [[ "$api_enabled" == "true" ]]; then
+                    break
+                fi
+            fi
+        fi
+    done <<< "$(gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null || echo "")"
+    
+    if [[ "$api_enabled" == "false" ]]; then
+        echo -e "\n${RED}🚫 NO BILLING-ENABLED PROJECTS FOUND${NC}"
+        echo "=========================================="
+        echo -e "${RED}Projects found but none are linked to billing accounts.${NC}"
+        echo ""
+        echo "⚠️  IMPORTANT: Cannot extract billing data without billing-enabled projects"
+        echo ""
+        echo "📋 TO ENABLE BILLING FOR A PROJECT:"
+        echo "1. Go to Google Cloud Console"
+        echo "2. Navigate to: Billing → Link a billing account"
+        echo "3. Select your project and link it to a billing account"
+        echo ""
+        echo "🔧 ALTERNATIVE - Link billing via gcloud CLI:"
+        echo "  gcloud beta billing projects link YOUR_PROJECT_ID --billing-account YOUR_BILLING_ACCOUNT_ID"
+        echo ""
+        echo "💡 Find your billing account ID:"
+        echo "  gcloud billing accounts list"
+        echo ""
+        echo "❗ NO BILLING DATA CAN BE EXTRACTED UNTIL PROJECTS ARE LINKED TO BILLING"
+        echo ""
+        echo -e "${YELLOW}Link your projects to a billing account, then run this script again.${NC}"
+        echo ""
+        return 1
+    fi
+    
+    return 0
+}
+
+# Get billing data for specified account and date range
+get_billing_data() {
+    local billing_account="$1"
+    local start_date="$2"
+    local end_date="$3"
+    
+    echo -e "\n${BLUE}💰 BILLING DATA ANALYSIS${NC}"
+    echo "=========================="
+    echo "Billing Account: $billing_account"
+    echo "Period: $start_date to $end_date"
+    echo ""
+    
+    # Clean up billing account ID (remove "billingAccounts/" prefix if present)
+    local clean_billing_id="$billing_account"
+    if [[ "$clean_billing_id" == billingAccounts/* ]]; then
+        clean_billing_id="${clean_billing_id#billingAccounts/}"
+    fi
+    
+    info "Fetching billing data..."
+    
+    # Try to get projects linked to this billing account
+    echo -e "${BLUE}📊 Projects linked to billing account:${NC}"
+    local projects_result
+    projects_result=$(gcloud beta billing projects list --billing-account="$clean_billing_id" --format="json" 2>/dev/null || echo "")
+    
+    if [[ -n "$projects_result" ]]; then
+        if command -v jq &> /dev/null; then
+            local project_count=$(echo "$projects_result" | jq '. | length' 2>/dev/null || echo "0")
+            if [[ "$project_count" != "0" ]]; then
+                local index=0
+                while [[ $index -lt $project_count ]]; do
+                    local project_json=$(echo "$projects_result" | jq ".[$index]" 2>/dev/null || echo "{}")
+                    local project_id=$(echo "$project_json" | jq -r '.projectId' 2>/dev/null || echo "Unknown")
+                    local billing_enabled=$(echo "$project_json" | jq -r '.billingEnabled' 2>/dev/null || echo "false")
+                    
+                    echo "  $((index + 1)). $project_id (Billing: $billing_enabled)"
+                    ((index++))
+                done
+                echo "Total projects: $project_count"
+            else
+                echo "  No projects found linked to this billing account"
+            fi
+        else
+            echo "$projects_result"
+        fi
+    else
+        echo "  No projects found or insufficient permissions"
+    fi
+    
+    # Try to get billing data using BigQuery export (if available)
+    echo -e "\n${YELLOW}Attempting to fetch billing data via BigQuery...${NC}"
+    
+    # Check if BigQuery is enabled and we have access
+    local bq_result
+    bq_result=$(bq ls --billing_account="$clean_billing_id" 2>/dev/null || echo "BIGQUERY_NOT_AVAILABLE")
+    
+    if [[ "$bq_result" != "BIGQUERY_NOT_AVAILABLE" && -n "$bq_result" ]]; then
+        echo -e "${GREEN}✓ BigQuery access detected${NC}"
+        echo "Available datasets:"
+        echo "$bq_result"
+        echo ""
+        echo "To get detailed billing data, use BigQuery with commands like:"
+        echo "  bq query --use_legacy_sql=false '"
+        echo "    SELECT"
+        echo "      project.id as project_id,"
+        echo "      service.description as service,"
+        echo "      cost_type,"
+        echo "      ROUND(SUM(cost), 2) as total_cost"
+        echo "    FROM \`billing_export.gcp_billing_export_v1_${clean_billing_id}\`"
+        echo "    WHERE usage_start_time >= TIMESTAMP(\"$start_date\")"
+        echo "      AND usage_start_time < TIMESTAMP(\"$end_date\")"
+        echo "    GROUP BY project_id, service, cost_type"
+        echo "    ORDER BY total_cost DESC"
+        echo "  '"
+    else
+        echo -e "${YELLOW}BigQuery billing export not available${NC}"
+        echo ""
+        echo -e "${BLUE}Alternative billing data sources:${NC}"
+        echo "1. Google Cloud Console → Billing → Reports"
+        echo "2. Enable BigQuery billing export in Cloud Console"
+        echo "3. Use 'gcloud billing accounts list' to view account details"
+        echo ""
+    fi
+    
+    echo ""
+    echo -e "${GREEN}✓ Billing data analysis completed${NC}"
+}
+
+# List GCP accounts
+list_accounts() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}GCP BILL - LIST ACCOUNTS COMMAND${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
+    
+    # Display billing account info if specified
+    if [[ -n "${BILLING_ACCOUNT_ID}" ]]; then
+        echo -e "${GREEN}✓ Using Billing Account:${NC} ${BILLING_ACCOUNT_ID}"
+        echo "======================================"
+    fi
+    
+    # Validate date range before proceeding
+    validate_dates "$START_DATE" "$END_DATE"
+    
+    info "Listing GCP accounts..."
+    
+    # Check if gcloud is installed
+    if ! command -v gcloud &> /dev/null; then
+        error_exit "gcloud CLI is not installed. Please install it first."
+    fi
+    
+    # Check if user is authenticated
+    if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null; then
+        error_exit "Not authenticated with gcloud. Run 'gcloud auth login' first."
+    fi
+    
+    # Check if Billing API is enabled
+    if ! check_billing_api; then
+        echo -e "${GREEN}✓ Basic account information:${NC}"
+        echo "==============================="
+    fi
+    
+    # Get list of accounts
+    local accounts
+    accounts=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/null || echo "")
+    
+    if [[ -z "$accounts" ]]; then
+        warning "No active GCP accounts found."
+        return 1
+    fi
+    
+    echo -e "${GREEN}✓ Active GCP Accounts:${NC}"
+    echo "========================"
+    local count=1
+    while IFS= read -r account; do
+        if [[ -n "$account" ]]; then
+            echo "$count. $account"
+            ((count++))
+        fi
+    done <<< "$accounts"
+    
+    success "Found $((count - 1)) active account(s)"
+    
+    # Get projects for each account
+    echo -e "\n${BLUE}✓ Projects per Account:${NC}"
+    echo "========================"
+    local account_count=1
+    while IFS= read -r account; do
+        if [[ -n "$account" ]]; then
+            echo -e "\n${YELLOW}Account $account_count: $account${NC}"
+            
+            # Set the account and get projects
+            if gcloud config set account "$account" &>/dev/null; then
+                local projects
+                projects=$(gcloud projects list --format="value(projectId)" 2>/dev/null || echo "")
+                
+                if [[ -n "$projects" ]]; then
+                    local project_count=1
+                    while IFS= read -r project; do
+                        if [[ -n "$project" ]]; then
+                            echo "  $project_count. $project"
+                            ((project_count++))
+                        fi
+                    done <<< "$projects"
+                    echo "  Total projects: $((project_count - 1))"
+                else
+                    echo "  No projects found"
+                fi
+            else
+                echo "  Failed to set account"
+            fi
+            ((account_count++))
+        fi
+    done <<< "$accounts"
+    
+    # Get billing accounts with better error handling and debugging
+    echo -e "\n${GREEN}✓ Billing Accounts:${NC}"
+    echo "===================="
+    
+    # Try to get billing accounts with detailed error output
+    local billing_result
+    billing_result=$(gcloud billing accounts list --format=json 2>&1)
+    local exit_code=$?
+    
+    if [[ $exit_code -eq 0 ]]; then
+        if command -v jq &> /dev/null; then
+            # Parse JSON output with jq - handle array correctly
+            local billing_count=$(echo "$billing_result" | jq '. | length' 2>/dev/null || echo "0")
+            
+            if [[ "$billing_count" != "0" && -n "$billing_result" ]]; then
+                # Process each billing account in the array
+                local index=0
+                while [[ $index -lt $billing_count ]]; do
+                    local account_json=$(echo "$billing_result" | jq ".[$index]" 2>/dev/null || echo "{}")
+                    local name=$(echo "$account_json" | jq -r '.name' 2>/dev/null || echo "")
+                    local display_name=$(echo "$account_json" | jq -r '.displayName' 2>/dev/null || echo "")
+                    local open=$(echo "$account_json" | jq -r '.open' 2>/dev/null || echo "")
+                    local currency=$(echo "$account_json" | jq -r '.currencyCode' 2>/dev/null || echo "")
+                    
+                    if [[ -n "$name" && "$name" != "null" ]]; then
+                        # Highlight specified billing account
+                        if [[ -n "${BILLING_ACCOUNT_ID}" && "$name" == *"$BILLING_ACCOUNT_ID"* ]]; then
+                            echo -e "${GREEN}★ $((index + 1)). $display_name (ID: $name)${NC}"
+                        else
+                            echo "$((index + 1)). $display_name (ID: $name)"
+                        fi
+                        echo "   Status: $([[ "$open" == "true" ]] && echo "Open" || echo "Closed")"
+                        if [[ -n "$currency" && "$currency" != "null" ]]; then
+                            echo "   Currency: $currency"
+                        fi
+                    fi
+                    ((index++))
+                done
+                
+                if [[ $billing_count -gt 0 ]]; then
+                    echo "Total billing accounts: $billing_count"
+                fi
+            else
+                echo "No billing accounts found (empty or invalid JSON response)"
+                echo "This could mean:"
+                echo "  - No billing accounts are associated with your projects"
+                echo "  - You don't have billing administrator permissions"
+                echo "  - Billing is not enabled for your account"
+            fi
+        else
+            warning "jq is not installed. Showing raw billing data:"
+            echo "$billing_result"
+        fi
+    else
+        echo "Failed to retrieve billing accounts (exit code: $exit_code)"
+        echo "Error details: $billing_result"
+        echo ""
+        echo "Common reasons for this error:"
+        echo "  - Insufficient permissions (need billing.admin role)"
+        echo "  - No billing accounts are associated with your projects"
+        echo "  - Billing API is not enabled"
+        echo ""
+        echo "Try running: gcloud billing accounts list"
+        echo "Or check: gcloud projects list --billing"
+    fi
+    
+    # Display date range if specified
+    if [[ -n "${BILLING_ACCOUNT_ID}" ]]; then
+        echo ""
+        echo -e "${BLUE}✓ Billing Analysis Settings:${NC}"
+        echo "=========================="
+        echo "Billing Account: $BILLING_ACCOUNT_ID"
+        echo "Date Range: $START_DATE to $END_DATE"
+        
+        # Get billing data if both billing account and date range are specified
+        get_billing_data "$BILLING_ACCOUNT_ID" "$START_DATE" "$END_DATE"
+    fi
+    
+    echo -e "\n${GREEN}✓ Command completed: ./gcpbill.sh --list-accounts${NC}"
+    echo -e "${BLUE}========================================${NC}"
+}
+
+# Help function
+show_help() {
+    echo -e "${BLUE}GCP Bill - Google Cloud Platform Billing Tool${NC}"
+    echo "=================================================="
+    echo ""
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  --list-accounts                    List all GCP accounts, projects, and billing accounts"
+    echo "  --billing-account ID               Specify billing account ID for analysis"
+    echo "  --start-date DATE                  Start date for billing analysis (YYYY-MM-DD)"
+    echo "  --end-date DATE                    End date for billing analysis (YYYY-MM-DD)"
+    echo "  --help, -h                         Show this help message"
+    echo ""
+    echo "Description:"
+    echo "  This tool helps you manage and analyze GCP billing data."
+    echo "  It requires gcloud CLI to be installed and authenticated, and Billing API to be enabled."
+    echo ""
+    echo "Examples:"
+    echo "  $0 --list-accounts"
+    echo "  $0 --list-accounts --billing-account 01EF07-CA2EE0-1C8B2F --start-date 2024-01-01 --end-date 2024-01-31"
+    echo "  $0 --list-accounts  # Uses default date range (last 30 days)"
+    echo ""
+}
+
+# Main function
+main() {
+    setup_directories
+    
+    case "${ACTION:-help}" in
+        list_accounts)
+            list_accounts
+            ;;
+        help|--help|-h)
+            show_help
+            ;;
+        *)
+            echo -e "${RED}Unknown option: ${ACTION}${NC}"
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# Script entry point
+parse_args "$@"
+main
