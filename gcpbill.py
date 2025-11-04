@@ -119,7 +119,7 @@ class GCPBillingViewer:
         
         return projects
 
-    def detect_bigquery_export(self, billing_account_id: str) -> Optional[str]:
+    def detect_bigquery_export(self, billing_account_id: str, verbose: bool = False) -> Optional[str]:
         clean_id = billing_account_id.replace('-', '_')
         
         common_patterns = [
@@ -132,11 +132,23 @@ class GCPBillingViewer:
         try:
             datasets = list(self.bq_client.list_datasets())
             
+            if verbose:
+                print(f"\nDebug: Searching for billing export table...")
+                print(f"Debug: Looking for patterns: {common_patterns}")
+                print(f"Debug: Found {len(datasets)} datasets in project '{self.project_id}'")
+            
             for dataset in datasets:
                 dataset_id = dataset.dataset_id
+                if verbose:
+                    print(f"Debug: Checking dataset '{dataset_id}'")
+                
                 if dataset_id in common_datasets:
                     tables = list(self.bq_client.list_tables(dataset_id))
+                    if verbose:
+                        print(f"Debug:   Found {len(tables)} tables in '{dataset_id}'")
                     for table in tables:
+                        if verbose:
+                            print(f"Debug:     - {table.table_id}")
                         for pattern in common_patterns:
                             if pattern in table.table_id:
                                 return f'{self.project_id}.{dataset_id}.{table.table_id}'
@@ -147,7 +159,14 @@ class GCPBillingViewer:
                     for pattern in common_patterns:
                         if pattern in table.table_id:
                             return f'{self.project_id}.{dataset.dataset_id}.{table.table_id}'
-        except Exception:
+            
+            if verbose:
+                print(f"\nDebug: No matching billing export table found")
+                print(f"Debug: Expected table name like: gcp_billing_export_v1_{clean_id}")
+                
+        except Exception as e:
+            if verbose:
+                print(f"Debug: Error during detection: {e}")
             pass
         
         return None
@@ -158,16 +177,18 @@ class GCPBillingViewer:
         start_date: str,
         end_date: str,
         project_filter: Optional[str] = None,
-        group_by: str = 'service'
+        group_by: str = 'service',
+        verbose: bool = False
     ) -> List[Dict[str, Any]]:
-        table_id = self.detect_bigquery_export(billing_account_id)
+        table_id = self.detect_bigquery_export(billing_account_id, verbose=verbose)
         
         if not table_id:
             print(f"\nBigQuery billing export not found for account: {billing_account_id}")
             print("\nTo enable billing export:")
-            print("  1. Run: python setup_bigquery_export.py --setup --billing-account {} --project YOUR_PROJECT".format(billing_account_id))
+            print("  1. Run: uv run setup_bigquery_export.py --setup --billing-account {} --project YOUR_PROJECT".format(billing_account_id))
             print("  2. Or manually configure in GCP Console → Billing → Billing export")
             print("\nNote: Billing data becomes available ~24 hours after export is enabled.")
+            print("\nTip: Run with --debug flag to see what datasets/tables were found")
             return []
         
         print(f"Using BigQuery table: {table_id}")
@@ -269,6 +290,8 @@ Examples:
                         choices=['table', 'csv', 'json'],
                         default='table',
                         help='Output format (default: table)')
+    parser.add_argument('--debug', action='store_true',
+                        help='Show debug information for troubleshooting')
     
     args = parser.parse_args()
     
@@ -309,7 +332,8 @@ Examples:
             start_date,
             end_date,
             args.project,
-            args.group_by
+            args.group_by,
+            verbose=args.debug
         )
         
         if costs:
