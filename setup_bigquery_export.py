@@ -83,6 +83,17 @@ class BigQueryExportSetup:
         try:
             dataset = self.bq_client.create_dataset(dataset, exists_ok=True)
             print(f"  ✓ Dataset '{dataset_name}' created/verified in {location}")
+            print(f"    Full dataset ID: {dataset_id}")
+            
+            existing_tables = list(self.bq_client.list_tables(dataset_name))
+            if existing_tables:
+                print(f"    Existing tables in dataset: {len(existing_tables)}")
+                for table in existing_tables:
+                    print(f"      - {table.table_id}")
+            else:
+                print(f"    Dataset is empty (no tables yet - this is expected)")
+                
+            print(f"    View dataset: https://console.cloud.google.com/bigquery?project={project_id}&ws=!1m4!1m3!3m2!1s{project_id}!2s{dataset_name}")
         except Exception as e:
             print(f"  ✗ Error creating dataset: {e}")
             print("\nCommon issues:")
@@ -100,6 +111,9 @@ class BigQueryExportSetup:
         print("  REQUIRED MANUAL STEP - PLEASE COMPLETE NOW")
         print("=" * 70)
         print("")
+        print(f"  The dataset '{dataset_name}' has already been created for you!")
+        print(f"  Now you just need to link it to your billing account.")
+        print("")
         print(f"  1. Open this URL in your browser:")
         print(f"     https://console.cloud.google.com/billing/{billing_account_id}/export")
         print("")
@@ -107,12 +121,15 @@ class BigQueryExportSetup:
         print("")
         print(f"  3. Under 'Detailed usage cost', click 'EDIT SETTINGS'")
         print("")
-        print(f"  4. Configure:")
-        print(f"     • Enable: ON")
-        print(f"     • Project: {project_id}")
-        print(f"     • Dataset: {dataset_name}")
+        print(f"  4. In the form that opens:")
+        print(f"     • Enable: Toggle to ON")
+        print(f"     • Project dropdown: Select '{project_id}'")
+        print(f"     • Dataset dropdown: Select '{dataset_name}' (already exists!)")
         print("")
         print(f"  5. Click 'SAVE'")
+        print("")
+        print(f"  NOTE: The dataset '{dataset_name}' already exists in your project.")
+        print(f"        You're just telling GCP to export billing data TO this dataset.")
         print("")
         print("=" * 70)
         print("")
