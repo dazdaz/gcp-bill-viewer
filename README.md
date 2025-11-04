@@ -128,16 +128,33 @@ Debug output includes:
 
 To retrieve actual cost data, you need to configure BigQuery billing export.
 
+**Important**: Google Cloud Platform does not provide an API to programmatically enable billing export. A brief manual step in the GCP Console is required (the script will guide you through it).
+
 ### Setup BigQuery Export
 
-1. Create the BigQuery dataset:
+Run the setup script - it will create the dataset and open your browser to the configuration page:
+
 ```bash
 uv run setup_bigquery_export.py --setup \
   --billing-account 01234-ABCDEF-56789 \
   --project my-billing-project
 ```
 
-2. Follow the manual configuration instructions printed by the script to enable export in GCP Console.
+The script will:
+1. Create the BigQuery dataset
+2. **Automatically open your browser** to the billing export configuration page
+3. Show you step-by-step instructions
+4. Wait for you to complete the configuration
+5. Verify the export table was created
+
+**What you need to do in the browser:**
+- Click the "BIGQUERY EXPORT" tab
+- Under "Detailed usage cost", click "EDIT SETTINGS"  
+- Enable the export and select your project/dataset
+- Click "SAVE"
+- Return to terminal and press ENTER
+
+That's it! The script handles everything else.
 
 ### Custom Configuration
 ```bash

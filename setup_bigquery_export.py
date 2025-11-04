@@ -93,16 +93,73 @@ class BigQueryExportSetup:
             sys.exit(1)
         
         print("\nStep 3: Configuring billing export...")
-        print("  ⚠ Note: Billing export configuration must be done via GCP Console")
-        print("\n  Manual steps required:")
-        print(f"  1. Go to: https://console.cloud.google.com/billing/{billing_account_id}")
-        print("  2. Navigate to 'Billing export' → 'BigQuery export'")
-        print("  3. Click 'EDIT SETTINGS' for 'Detailed usage cost'")
-        print(f"  4. Select project: {project_id}")
-        print(f"  5. Select dataset: {dataset_name}")
-        print("  6. Click 'SAVE'")
-        print("\n  The Cloud Billing API does not currently support programmatic export configuration.")
-        print("  This is a GCP platform limitation.")
+        print("  ⚠ IMPORTANT: Billing export MUST be configured via GCP Console")
+        print("  This is a Google Cloud Platform limitation - no API exists for this.")
+        print("")
+        print("=" * 70)
+        print("  REQUIRED MANUAL STEP - PLEASE COMPLETE NOW")
+        print("=" * 70)
+        print("")
+        print(f"  1. Open this URL in your browser:")
+        print(f"     https://console.cloud.google.com/billing/{billing_account_id}/export")
+        print("")
+        print(f"  2. Click the 'BIGQUERY EXPORT' tab")
+        print("")
+        print(f"  3. Under 'Detailed usage cost', click 'EDIT SETTINGS'")
+        print("")
+        print(f"  4. Configure:")
+        print(f"     • Enable: ON")
+        print(f"     • Project: {project_id}")
+        print(f"     • Dataset: {dataset_name}")
+        print("")
+        print(f"  5. Click 'SAVE'")
+        print("")
+        print("=" * 70)
+        print("")
+        
+        import webbrowser
+        console_url = f"https://console.cloud.google.com/billing/{billing_account_id}/export"
+        
+        try:
+            print(f"Attempting to open browser automatically...")
+            webbrowser.open(console_url)
+            print(f"✓ Browser opened to billing export configuration page")
+        except Exception as e:
+            print(f"✗ Could not open browser automatically")
+            print(f"  Please manually open: {console_url}")
+        
+        print("")
+        input("Press ENTER after you have completed the configuration in the Console...")
+        
+        print("\nVerifying configuration...")
+        import time
+        print("Waiting 10 seconds for GCP to create the export table...")
+        time.sleep(10)
+        
+        clean_billing_id = billing_account_id.replace('-', '_')
+        expected_table = f"gcp_billing_export_v1_{clean_billing_id}"
+        
+        try:
+            tables = list(self.bq_client.list_tables(dataset_name))
+            table_found = False
+            for table in tables:
+                if expected_table in table.table_id:
+                    table_found = True
+                    print(f"✓ Billing export table created: {table.table_id}")
+                    break
+            
+            if not table_found:
+                print(f"⚠ Table '{expected_table}' not found yet")
+                print("  This is normal - the table may take a few minutes to appear")
+                print("  You can verify later by running:")
+                print(f"    bq ls {project_id}:{dataset_name}")
+        except Exception as e:
+            print(f"  Could not verify table creation: {e}")
+        
+        print("")
+        print("  Note: GCP does not provide an API to enable billing export.")
+        print("  This manual step is required by Google Cloud Platform.")
+        print("")
         
         print(f"\n=== Setup Information ===\n")
         print(f"Dataset created: {dataset_id}")
