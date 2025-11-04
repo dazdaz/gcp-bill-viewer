@@ -193,11 +193,33 @@ class GCPBillingViewer:
         
         print(f"Using BigQuery table: {table_id}")
         
+        table_creation_info = self._get_table_creation_time(table_id, verbose)
+        
         table_has_data = self._check_table_has_data(table_id, verbose)
         if not table_has_data:
             print("\nTable exists but contains no data.")
-            print("Billing data export may not be configured or data hasn't been exported yet.")
-            print("Wait ~24 hours after configuring export in GCP Console.")
+            if table_creation_info:
+                hours_since_creation = table_creation_info['hours_since_creation']
+                created_at = table_creation_info['created_at']
+                
+                print(f"Table created: {created_at}")
+                print(f"Time elapsed: {hours_since_creation:.1f} hours")
+                
+                if hours_since_creation < 24:
+                    hours_remaining = 24 - hours_since_creation
+                    print(f"\nData should be available in ~{hours_remaining:.1f} hours (24 hours after creation).")
+                    print("Billing data export typically takes up to 24 hours after table creation.")
+                else:
+                    print(f"\nIt's been over 24 hours since table creation.")
+                    print("Possible issues:")
+                    print("  1. Billing export not configured in GCP Console (only dataset/table created)")
+                    print("  2. No usage/costs have been incurred yet")
+                    print("  3. Export configuration error")
+                    print("\nVerify billing export is enabled:")
+                    print(f"  https://console.cloud.google.com/billing/{billing_account_id.replace('_', '-')}")
+            else:
+                print("Billing data export may not be configured or data hasn't been exported yet.")
+                print("Wait ~24 hours after configuring export in GCP Console.")
             return []
         
         date_range_info = self._check_date_range_coverage(table_id, start_date, end_date, verbose)
@@ -274,6 +296,41 @@ class GCPBillingViewer:
             if verbose:
                 print(f"Debug: Error checking table data: {e}")
             return False
+    
+    def _get_table_creation_time(self, table_id: str, verbose: bool = False) -> Optional[Dict[str, Any]]:
+        try:
+            parts = table_id.split('.')
+            if len(parts) == 3:
+                project_id, dataset_id, table_name = parts
+            else:
+                return None
+            
+            if verbose:
+                print(f"Debug: Getting table creation time for {table_id}")
+            
+            table_ref = self.bq_client.dataset(dataset_id, project=project_id).table(table_name)
+            table = self.bq_client.get_table(table_ref)
+            
+            created_time = table.created
+            now = datetime.now(created_time.tzinfo)
+            time_diff = now - created_time
+            hours_since_creation = time_diff.total_seconds() / 3600
+            
+            created_at_str = created_time.strftime('%Y-%m-%d %H:%M:%S %Z')
+            
+            if verbose:
+                print(f"Debug: Table created at {created_at_str}")
+                print(f"Debug: {hours_since_creation:.1f} hours ago")
+            
+            return {
+                'created_at': created_at_str,
+                'hours_since_creation': hours_since_creation,
+                'created_timestamp': created_time
+            }
+        except Exception as e:
+            if verbose:
+                print(f"Debug: Error getting table creation time: {e}")
+            return None
     
     def _check_date_range_coverage(self, table_id: str, start_date: str, end_date: str, verbose: bool = False) -> Optional[Dict[str, Any]]:
         try:
