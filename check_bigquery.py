@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
 import sys
+import warnings
+
+warnings.filterwarnings('ignore', category=FutureWarning, module='google.api_core._python_version_support')
+
 from google.cloud import bigquery
 from google.auth import default
 
@@ -31,6 +35,24 @@ try:
                     print(f"        Rows: {table_ref.num_rows:,}")
             else:
                 print(f"    No tables (empty dataset)")
+                print()
+                print("    ⚠ BILLING EXPORT NOT CONFIGURED YET!")
+                print()
+                print("    The dataset exists but billing export hasn't been enabled.")
+                print("    You need to complete the manual configuration in GCP Console:")
+                print()
+                print("    1. Go to: https://console.cloud.google.com/billing")
+                print("    2. Select your billing account: 01EF07-CA2EE0-1C8B2F")
+                print("    3. Click 'Billing export' → 'BigQuery export'")
+                print("    4. Under 'Detailed usage cost', click 'EDIT SETTINGS'")
+                print("    5. Toggle Enable to ON")
+                print(f"    6. Select Project: {project_id}")
+                print(f"    7. Select Dataset: {dataset.dataset_id}")
+                print("    8. Click 'SAVE'")
+                print()
+                print("    Or run the setup script again and complete the browser step:")
+                print("    ./setup_bigquery_export.py --setup \\")
+                print(f"      --billing-account 01EF07-CA2EE0-1C8B2F --project {project_id}")
             print()
 
 except Exception as e:
