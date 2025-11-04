@@ -11,6 +11,12 @@ Python-based tool to view GCP billing accounts, projects, and actual costs via B
 - Multiple output formats: table, CSV, JSON
 - Cross-platform date handling
 - Automatic BigQuery export detection
+- Intelligent diagnostics:
+  - Detects if billing export table exists
+  - Checks when table was created and calculates wait time
+  - Validates date range against available data
+  - Distinguishes between $0 bills and missing data
+  - Debug mode for troubleshooting
 
 ## Prerequisites
 
@@ -99,7 +105,24 @@ uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --format csv > co
 
 # Export to JSON
 uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --format json > costs.json
+
+# Debug mode (troubleshooting)
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --debug
 ```
+
+### Debug Mode
+
+Use `--debug` flag to see detailed diagnostic information:
+
+```bash
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --debug
+```
+
+Debug output includes:
+- All datasets and tables found in your project
+- Table creation timestamp and elapsed time
+- Date range coverage of available billing data
+- Detailed error messages
 
 ## BigQuery Billing Export Setup
 
@@ -144,13 +167,35 @@ uv run setup_bigquery_export.py --destroy \
 ## Important Notes
 
 - **Billing data delay**: Data appears in BigQuery ~24 hours after export is enabled
+  - The script automatically checks when the export table was created
+  - Shows exact time elapsed and estimated wait time remaining
+- **One-time setup**: Run `setup_bigquery_export.py` once, then billing data updates automatically daily
 - **API limitations**: Cloud Billing API does not support programmatic export configuration (must use Console)
 - **Permissions required**:
   - `billing.accounts.list` - List billing accounts
   - `billing.accounts.getSpendingInformation` - View billing data
   - `bigquery.datasets.create` - Create datasets
   - `bigquery.jobs.create` - Query BigQuery
+  - `bigquery.tables.get` - Get table metadata
 - **Cross-platform**: Works on macOS, Linux, and Windows
+- **$0 bills**: The script correctly reports $0.00 when you have no usage costs
+
+## How It Works
+
+1. **Setup** (one-time):
+   - Run `setup_bigquery_export.py --setup` to create BigQuery dataset
+   - Complete manual configuration in GCP Console (GCP API limitation)
+   - Wait ~24 hours for first data export
+
+2. **Daily Updates** (automatic):
+   - GCP exports billing data to BigQuery daily
+   - No manual action required
+   - Data accumulates over time
+
+3. **View Costs** (anytime):
+   - Run `gcpbill.py --costs` to query costs
+   - Specify date ranges, grouping, filters
+   - Export to CSV/JSON for analysis
 
 ## Troubleshooting
 
@@ -159,9 +204,26 @@ uv run setup_bigquery_export.py --destroy \
 - Check you have `Billing Account Viewer` or `Billing Account Administrator` role
 
 ### BigQuery export not detected
-- Ensure export is configured in GCP Console
-- Verify the dataset and table exist
+- Run with `--debug` flag to see what datasets/tables were found
+- Ensure export is configured in GCP Console (not just dataset created)
+- Verify the dataset and table exist in BigQuery
 - Check you're using the correct billing account ID
+
+### Table exists but no data
+The script will automatically detect this and show:
+- When the table was created
+- Time elapsed since creation
+- Estimated wait time (if < 24 hours)
+- Troubleshooting steps (if > 24 hours)
+
+**If < 24 hours**: Wait for GCP to export data  
+**If > 24 hours**: Verify export is enabled in GCP Console
+
+### Date range outside available data
+The script detects this automatically and shows:
+- Your requested date range
+- Available data range in BigQuery
+- Clear message that dates don't overlap
 
 ### Authentication errors
 - Run `gcloud auth application-default login`
@@ -170,5 +232,17 @@ uv run setup_bigquery_export.py --destroy \
 - Set a quota project if needed: `gcloud auth application-default set-quota-project YOUR_PROJECT_ID`
 
 ### Python version warning
-- The warning about Python 3.10 reaching end-of-life can be ignored (it's suppressed in the code)
+- The warning about Python 3.10 reaching end-of-life is suppressed automatically
 - Consider upgrading to Python 3.11+ for continued support
+
+### General troubleshooting
+Always run with `--debug` flag first:
+```bash
+uv run gcpbill.py --costs --billing-account YOUR_ACCOUNT_ID --debug
+```
+
+This shows detailed diagnostics about:
+- Table detection process
+- Table creation time
+- Data availability
+- Date range coverage
