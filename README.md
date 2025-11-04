@@ -15,19 +15,43 @@ Python-based tool to view GCP billing accounts, projects, and actual costs via B
 ## Prerequisites
 
 - Python 3.7+
+- [uv](https://docs.astral.sh/uv/) - Fast Python package installer
 - Google Cloud SDK (gcloud CLI)
 - Authenticated GCP account
 - For cost data: BigQuery billing export configured
 
 ## Installation
 
-1. Install dependencies:
+1. Install uv (if not already installed):
 ```bash
-pip install -r requirements.txt
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-2. Authenticate with Google Cloud:
+2. Install dependencies:
 ```bash
+uv pip install -r requirements.txt
+```
+
+Or install dependencies in a virtual environment:
+```bash
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+uv pip install -r requirements.txt
+```
+
+3. Authenticate with Google Cloud:
+```bash
+gcloud auth application-default login
+```
+
+**Important**: After authentication, you may need to set a quota project:
+```bash
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+```
+
+Or authenticate with an existing project:
+```bash
+gcloud config set project YOUR_PROJECT_ID
 gcloud auth application-default login
 ```
 
@@ -35,15 +59,15 @@ gcloud auth application-default login
 
 ### View Billing Accounts
 ```bash
-python gcpbill.py --list-accounts
+uv run gcpbill.py --list-accounts
 ```
 
 ### View Projects with Billing Status
 ```bash
-python gcpbill.py --list-projects
+uv run gcpbill.py --list-projects
 
 # Filter by billing account
-python gcpbill.py --list-projects --billing-account 01234-ABCDEF-56789
+uv run gcpbill.py --list-projects --billing-account 01234-ABCDEF-56789
 ```
 
 ### View Actual Billing Costs
@@ -51,30 +75,30 @@ Requires BigQuery billing export to be configured (see Setup below).
 
 ```bash
 # Last 30 days (default)
-python gcpbill.py --costs --billing-account 01234-ABCDEF-56789
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789
 
 # Specific date range
-python gcpbill.py --costs --billing-account 01234-ABCDEF-56789 \
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 \
   --start-date 2025-01-01 --end-date 2025-01-31
 
 # Group by service (default)
-python gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by service
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by service
 
 # Group by project
-python gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by project
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by project
 
 # Group by day or month
-python gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by day
-python gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by month
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by day
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by month
 
 # Filter by project
-python gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --project my-project-id
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --project my-project-id
 
 # Export to CSV
-python gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --format csv > costs.csv
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --format csv > costs.csv
 
 # Export to JSON
-python gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --format json > costs.json
+uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --format json > costs.json
 ```
 
 ## BigQuery Billing Export Setup
@@ -85,7 +109,7 @@ To retrieve actual cost data, you need to configure BigQuery billing export.
 
 1. Create the BigQuery dataset:
 ```bash
-python setup_bigquery_export.py --setup \
+uv run setup_bigquery_export.py --setup \
   --billing-account 01234-ABCDEF-56789 \
   --project my-billing-project
 ```
@@ -95,7 +119,7 @@ python setup_bigquery_export.py --setup \
 ### Custom Configuration
 ```bash
 # Custom dataset name and location
-python setup_bigquery_export.py --setup \
+uv run setup_bigquery_export.py --setup \
   --billing-account 01234-ABCDEF-56789 \
   --project my-billing-project \
   --dataset custom_billing \
@@ -106,12 +130,12 @@ python setup_bigquery_export.py --setup \
 
 ```bash
 # Disable export but keep dataset
-python setup_bigquery_export.py --destroy \
+uv run setup_bigquery_export.py --destroy \
   --billing-account 01234-ABCDEF-56789 \
   --project my-billing-project
 
 # Disable export and delete dataset
-python setup_bigquery_export.py --destroy \
+uv run setup_bigquery_export.py --destroy \
   --billing-account 01234-ABCDEF-56789 \
   --project my-billing-project \
   --delete-dataset
@@ -142,12 +166,9 @@ python setup_bigquery_export.py --destroy \
 ### Authentication errors
 - Run `gcloud auth application-default login`
 - Verify credentials are valid: `gcloud auth list`
+- If you see "Reauthentication is needed", your credentials have expired - re-run the login command
+- Set a quota project if needed: `gcloud auth application-default set-quota-project YOUR_PROJECT_ID`
 
-## Legacy Bash Scripts
-
-The original bash scripts (`gcp`, `gcpbill`, `gcpbill.sh`) are kept for backward compatibility but have limitations:
-- macOS-specific date commands
-- No actual cost data retrieval
-- Limited output formatting
-
-Use the new Python scripts for better functionality and cross-platform support.
+### Python version warning
+- The warning about Python 3.10 reaching end-of-life can be ignored (it's suppressed in the code)
+- Consider upgrading to Python 3.11+ for continued support

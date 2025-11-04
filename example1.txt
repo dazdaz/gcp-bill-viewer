@@ -1,0 +1,4 @@
+./setup_bigquery_export.py --billing-account 01EF07-CA2EE0-1C8B2F --project <my-project> --setup
+
+# Last 30 days (default)
+./gcpbill.py --costs --billing-account 01EF07-CA2EE0-1C8B2F

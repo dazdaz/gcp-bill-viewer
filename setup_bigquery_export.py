@@ -2,19 +2,22 @@
 
 import argparse
 import sys
+import warnings
 from typing import Optional
+
+warnings.filterwarnings('ignore', category=FutureWarning, module='google.api_core._python_version_support')
 
 try:
     from google.cloud import billing_v1
     from google.cloud import bigquery
     from google.cloud import resourcemanager_v3
     from google.auth import default
-    from google.auth.exceptions import DefaultCredentialsError
+    from google.auth.exceptions import DefaultCredentialsError, RefreshError
     from google.api_core import exceptions
 except ImportError as e:
     print(f"Error: Missing required dependency: {e}")
     print("\nPlease install dependencies with:")
-    print("  pip install -r requirements.txt")
+    print("  uv pip install -r requirements.txt")
     sys.exit(1)
 
 
@@ -29,11 +32,14 @@ class BigQueryExportSetup:
     def _authenticate(self):
         try:
             self.credentials, self.default_project_id = default()
-        except DefaultCredentialsError:
+        except (DefaultCredentialsError, RefreshError) as e:
             print("Error: Not authenticated with Google Cloud.")
+            print(f"\nDetails: {e}")
             print("\nPlease authenticate using one of these methods:")
             print("  1. gcloud auth application-default login")
             print("  2. gcloud auth login")
+            print("\nIf you see 'Reauthentication is needed', run:")
+            print("  gcloud auth application-default login")
             sys.exit(1)
 
     def setup_export(
@@ -53,13 +59,20 @@ class BigQueryExportSetup:
         
         print("Step 1: Verifying project access...")
         try:
-            project = self.bq_client.get_project(project_id)
-            print(f"  ✓ Project '{project_id}' verified")
+            datasets = list(self.bq_client.list_datasets(max_results=1))
+            print(f"  ✓ Project '{project_id}' verified (BigQuery access confirmed)")
         except exceptions.NotFound:
             print(f"  ✗ Project '{project_id}' not found")
             sys.exit(1)
+        except exceptions.Forbidden:
+            print(f"  ✗ Access denied to project '{project_id}'")
+            print("  - Check that you have permissions on this project")
+            print("  - Verify BigQuery API is enabled")
+            sys.exit(1)
         except Exception as e:
             print(f"  ✗ Error accessing project: {e}")
+            print("\nTrying to enable BigQuery API...")
+            print(f"  Run: gcloud services enable bigquery.googleapis.com --project={project_id}")
             sys.exit(1)
         
         print("\nStep 2: Creating BigQuery dataset...")

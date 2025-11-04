@@ -4,19 +4,22 @@ import argparse
 import sys
 import json
 import csv
+import warnings
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+
+warnings.filterwarnings('ignore', category=FutureWarning, module='google.api_core._python_version_support')
 
 try:
     from google.cloud import billing_v1
     from google.cloud import bigquery
     from google.auth import default
-    from google.auth.exceptions import DefaultCredentialsError
+    from google.auth.exceptions import DefaultCredentialsError, RefreshError
     from tabulate import tabulate
 except ImportError as e:
     print(f"Error: Missing required dependency: {e}")
     print("\nPlease install dependencies with:")
-    print("  pip install -r requirements.txt")
+    print("  uv pip install -r requirements.txt")
     sys.exit(1)
 
 
@@ -31,12 +34,19 @@ class GCPBillingViewer:
     def _authenticate(self):
         try:
             self.credentials, self.project_id = default()
-        except DefaultCredentialsError:
+        except (DefaultCredentialsError, RefreshError) as e:
             print("Error: Not authenticated with Google Cloud.")
+            print(f"\nDetails: {e}")
             print("\nPlease authenticate using one of these methods:")
             print("  1. gcloud auth application-default login")
             print("  2. gcloud auth login")
             print("  3. Set GOOGLE_APPLICATION_CREDENTIALS environment variable")
+            print("\nIf you see 'Reauthentication is needed', run:")
+            print("  gcloud auth application-default login")
+            sys.exit(1)
+        except Exception as e:
+            print(f"Error during authentication: {e}")
+            print("\nPlease run: gcloud auth application-default login")
             sys.exit(1)
 
     def list_billing_accounts(self, account_filter: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -57,11 +67,18 @@ class GCPBillingViewer:
                     'open': account.open,
                     'currency': account.currency_code if hasattr(account, 'currency_code') else 'N/A'
                 })
+        except RefreshError as e:
+            print(f"Error: Authentication expired or invalid.")
+            print(f"\nDetails: {e}")
+            print("\nPlease re-authenticate:")
+            print("  gcloud auth application-default login")
+            sys.exit(1)
         except Exception as e:
             print(f"Error listing billing accounts: {e}")
             print("\nCommon issues:")
             print("  - Insufficient permissions (need billing.accounts.list)")
             print("  - No billing accounts associated with your account")
+            print("  - Authentication expired (run: gcloud auth application-default login)")
             sys.exit(1)
         
         return accounts
@@ -302,6 +319,13 @@ Examples:
                 total = sum(c['cost'] for c in costs)
                 currency = costs[0]['currency'] if costs else 'USD'
                 print(f"\nTotal: {total:.2f} {currency}")
+        else:
+            print("No costs found for the specified period.")
+            print("This could mean:")
+            print("  - Your bill is $0.00 (no usage)")
+            print("  - No data has been exported yet (wait ~24 hours after setup)")
+            print("  - The date range is outside your billing data")
+            print(f"\nTotal: 0.00 USD")
 
 
 if __name__ == '__main__':
