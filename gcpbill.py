@@ -193,6 +193,15 @@ class GCPBillingViewer:
         
         print(f"Using BigQuery table: {table_id}")
         
+        table_has_data = self._check_table_has_data(table_id, verbose)
+        if not table_has_data:
+            print("\nTable exists but contains no data.")
+            print("Billing data export may not be configured or data hasn't been exported yet.")
+            print("Wait ~24 hours after configuring export in GCP Console.")
+            return []
+        
+        date_range_info = self._check_date_range_coverage(table_id, start_date, end_date, verbose)
+        
         group_fields = {
             'service': 'service.description',
             'project': 'project.id',
@@ -233,10 +242,79 @@ class GCPBillingViewer:
                     'currency': row.currency
                 })
             
+            if not costs and date_range_info:
+                print(f"\nNo costs found in requested range: {start_date} to {end_date}")
+                if date_range_info['has_data']:
+                    print(f"Available data range: {date_range_info['min_date']} to {date_range_info['max_date']}")
+                    if date_range_info['outside_range']:
+                        print("Your requested date range is outside the available billing data.")
+            
             return costs
         except Exception as e:
             print(f"Error querying BigQuery: {e}")
             return []
+    
+    def _check_table_has_data(self, table_id: str, verbose: bool = False) -> bool:
+        try:
+            query = f"SELECT COUNT(*) as row_count FROM `{table_id}` LIMIT 1"
+            if verbose:
+                print(f"Debug: Checking if table has data...")
+            
+            query_job = self.bq_client.query(query)
+            results = query_job.result()
+            
+            for row in results:
+                row_count = row.row_count
+                if verbose:
+                    print(f"Debug: Table has {row_count} rows")
+                return row_count > 0
+            
+            return False
+        except Exception as e:
+            if verbose:
+                print(f"Debug: Error checking table data: {e}")
+            return False
+    
+    def _check_date_range_coverage(self, table_id: str, start_date: str, end_date: str, verbose: bool = False) -> Optional[Dict[str, Any]]:
+        try:
+            query = f"""
+            SELECT 
+                MIN(DATE(usage_start_time)) as min_date,
+                MAX(DATE(usage_start_time)) as max_date
+            FROM `{table_id}`
+            """
+            
+            if verbose:
+                print(f"Debug: Checking date range coverage...")
+            
+            query_job = self.bq_client.query(query)
+            results = query_job.result()
+            
+            for row in results:
+                if row.min_date and row.max_date:
+                    min_date_str = row.min_date.strftime('%Y-%m-%d')
+                    max_date_str = row.max_date.strftime('%Y-%m-%d')
+                    
+                    if verbose:
+                        print(f"Debug: Data available from {min_date_str} to {max_date_str}")
+                    
+                    requested_start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    requested_end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                    
+                    outside_range = (requested_end < row.min_date or requested_start > row.max_date)
+                    
+                    return {
+                        'has_data': True,
+                        'min_date': min_date_str,
+                        'max_date': max_date_str,
+                        'outside_range': outside_range
+                    }
+            
+            return {'has_data': False, 'min_date': None, 'max_date': None, 'outside_range': True}
+        except Exception as e:
+            if verbose:
+                print(f"Debug: Error checking date range: {e}")
+            return None
 
     def format_output(self, data: List[Dict[str, Any]], output_format: str):
         if not data:
@@ -344,12 +422,8 @@ Examples:
                 currency = costs[0]['currency'] if costs else 'USD'
                 print(f"\nTotal: {total:.2f} {currency}")
         else:
-            print("No costs found for the specified period.")
-            print("This could mean:")
-            print("  - Your bill is $0.00 (no usage)")
-            print("  - No data has been exported yet (wait ~24 hours after setup)")
-            print("  - The date range is outside your billing data")
-            print(f"\nTotal: 0.00 USD")
+            if args.format == 'table':
+                print("\nTotal: 0.00 USD")
 
 
 if __name__ == '__main__':
