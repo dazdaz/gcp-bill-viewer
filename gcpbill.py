@@ -195,6 +195,12 @@ class GCPBillingViewer:
         
         table_creation_info = self._get_table_creation_time(table_id, verbose)
         
+        if verbose and table_creation_info:
+            hours_since_creation = table_creation_info['hours_since_creation']
+            created_at = table_creation_info['created_at']
+            print(f"\nTable created: {created_at}")
+            print(f"Time elapsed: {hours_since_creation:.1f} hours ({hours_since_creation/24:.1f} days)")
+        
         table_has_data = self._check_table_has_data(table_id, verbose)
         if not table_has_data:
             print("\nTable exists but contains no data.")
@@ -202,8 +208,9 @@ class GCPBillingViewer:
                 hours_since_creation = table_creation_info['hours_since_creation']
                 created_at = table_creation_info['created_at']
                 
-                print(f"Table created: {created_at}")
-                print(f"Time elapsed: {hours_since_creation:.1f} hours")
+                if not verbose:
+                    print(f"Table created: {created_at}")
+                    print(f"Time elapsed: {hours_since_creation:.1f} hours")
                 
                 if hours_since_creation < 24:
                     hours_remaining = 24 - hours_since_creation
@@ -223,6 +230,10 @@ class GCPBillingViewer:
             return []
         
         date_range_info = self._check_date_range_coverage(table_id, start_date, end_date, verbose)
+        
+        if verbose and date_range_info and date_range_info['has_data']:
+            print(f"\nData available from: {date_range_info['min_date']} to {date_range_info['max_date']}")
+            print(f"Requested range: {start_date} to {end_date}")
         
         group_fields = {
             'service': 'service.description',
