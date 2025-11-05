@@ -1,4 +1,11 @@
-./setup_bigquery_export.py --billing-account 01EF07-CA2EE0-1C8B2F --project songbp --setup
+#BILLING_ID=$(./gcp-bill-viewer.py --list-accounts --format csv | tail -n +3 | cut -d"," -f1)
+BILLING_ID=$(./gcp-bill-viewer.py --list-accounts --format json | tail -n +3 | jq -r ".[0].id")'
+PROJECT_ID=songbp
+
+./setup_bigquery_export.py --billing-account $BILLING_ID --project $PROJECT_ID --setup
+
+# Run this 60 minutes later
+./check_bigquery.py
 
 # Last 30 days (default)
-./gcpbill.py --costs --billing-account 01EF07-CA2EE0-1C8B2F
+./gcp-bill-viewer.py --costs --billing-account $BILLING_ID

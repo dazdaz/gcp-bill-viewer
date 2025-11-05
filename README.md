@@ -65,15 +65,15 @@ gcloud auth application-default login
 
 ### View Billing Accounts
 ```bash
-uv run gcpbill.py --list-accounts
+uv run gcp-bill-viewer.py --list-accounts
 ```
 
 ### View Projects with Billing Status
 ```bash
-uv run gcpbill.py --list-projects
+uv run gcp-bill-viewer.py --list-projects
 
 # Filter by billing account
-uv run gcpbill.py --list-projects --billing-account 01234-ABCDEF-56789
+uv run gcp-bill-viewer.py --list-projects --billing-account 01234-ABCDEF-56789
 ```
 
 ### View Actual Billing Costs
@@ -81,33 +81,33 @@ Requires BigQuery billing export to be configured (see Setup below).
 
 ```bash
 # Last 30 days (default)
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789
 
 # Specific date range
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 \
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 \
   --start-date 2025-01-01 --end-date 2025-01-31
 
 # Group by service (default)
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by service
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by service
 
 # Group by project
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by project
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by project
 
 # Group by day or month
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by day
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --group-by month
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by day
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by month
 
 # Filter by project
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --project my-project-id
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --project my-project-id
 
 # Export to CSV
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --format csv > costs.csv
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --format csv > costs.csv
 
 # Export to JSON
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --format json > costs.json
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --format json > costs.json
 
 # Debug mode (troubleshooting)
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --debug
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --debug
 ```
 
 ### Debug Mode
@@ -115,7 +115,7 @@ uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --debug
 Use `--debug` flag to see detailed diagnostic information:
 
 ```bash
-uv run gcpbill.py --costs --billing-account 01234-ABCDEF-56789 --debug
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --debug
 ```
 
 Debug output includes:
@@ -210,7 +210,7 @@ uv run setup_bigquery_export.py --destroy \
    - Data accumulates over time
 
 3. **View Costs** (anytime):
-   - Run `gcpbill.py --costs` to query costs
+   - Run `gcp-bill-viewer.py --costs` to query costs
    - Specify date ranges, grouping, filters
    - Export to CSV/JSON for analysis
 
@@ -255,7 +255,7 @@ The script detects this automatically and shows:
 ### General troubleshooting
 Always run with `--debug` flag first:
 ```bash
-uv run gcpbill.py --costs --billing-account YOUR_ACCOUNT_ID --debug
+uv run gcp-bill-viewer.py --costs --billing-account YOUR_ACCOUNT_ID --debug
 ```
 
 This shows detailed diagnostics about:

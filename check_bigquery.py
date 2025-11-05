@@ -224,7 +224,7 @@ def provide_recommendations(billing_export_found, billing_tables, project_id):
                         formatted_id = f"{billing_id[:6]}-{billing_id[6:12]}-{billing_id[12:]}"
                     else:
                         formatted_id = billing_id
-                    print(f"  ./gcpbill.py --costs --billing-account {formatted_id}")
+                    print(f"  ./gcp-bill-viewer.py --costs --billing-account {formatted_id}")
                     break
         else:
             youngest_table = min(billing_tables, key=lambda x: x['hours_ago'])
@@ -268,4 +268,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

@@ -185,7 +185,7 @@ class BigQueryExportSetup:
         print(f"  Table: {dataset_id}.gcp_billing_export_v1_{billing_account_id.replace('-', '_')}")
         print(f"\nData will be available ~24 hours after export is enabled.")
         print(f"\nTo verify export is working:")
-        print(f"  python gcpbill.py --costs --billing-account {billing_account_id}")
+        print(f"  python gcp-bill-viewer.py --costs --billing-account {billing_account_id}")
 
     def destroy_export(
         self,
