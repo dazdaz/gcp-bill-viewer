@@ -20,7 +20,7 @@ Python-based tool to view GCP billing accounts, projects, and actual costs via B
 
 ## Example
 ```text
-/gcp-bill-viewer.py --costs --billing-account $BILLING_ID
+./gcp-bill-viewer.py --costs --billing-account $BILLING_ID
 
 === Billing Costs (2025-10-06 to 2025-11-05) ===
 
