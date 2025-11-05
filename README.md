@@ -81,66 +81,9 @@ gcloud auth application-default login
 
 ## Usage
 
-### View Billing Accounts
-```bash
-uv run gcp-bill-viewer.py --list-accounts
-```
-
-### View Projects with Billing Status
-```bash
-uv run gcp-bill-viewer.py --list-projects
-
-# Filter by billing account
-uv run gcp-bill-viewer.py --list-projects --billing-account 01234-ABCDEF-56789
-```
-
-### View Actual Billing Costs
-Requires BigQuery billing export to be configured (see Setup below).
-
-```bash
-# Last 30 days (default)
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789
-
-# Specific date range
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 \
-  --start-date 2025-01-01 --end-date 2025-01-31
-
-# Group by service (default)
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by service
-
-# Group by project
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by project
-
-# Group by day or month
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by day
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by month
-
-# Filter by project
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --project my-project-id
-
-# Export to CSV
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --format csv > costs.csv
-
-# Export to JSON
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --format json > costs.json
-
-# Debug mode (troubleshooting)
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --debug
-```
-
-### Debug Mode
-
-Use `--debug` flag to see detailed diagnostic information:
-
-```bash
-uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --debug
-```
-
-Debug output includes:
-- All datasets and tables found in your project
-- Table creation timestamp and elapsed time
-- Date range coverage of available billing data
-- Detailed error messages
+1. ./setup_bigquery_export.py --billing-account $BILLING_ID --project $PROJECT_ID --setup
+2. ./check_bigquery.py
+3. ./gcp-bill-viewer.py --costs --billing-account $BILLING_ID
 
 ## BigQuery Billing Export Setup
 
@@ -259,6 +202,67 @@ The script detects this automatically and shows:
 - Your requested date range
 - Available data range in BigQuery
 - Clear message that dates don't overlap
+
+### View Billing Accounts
+```bash
+uv run gcp-bill-viewer.py --list-accounts
+```
+
+### View Projects with Billing Status
+```bash
+uv run gcp-bill-viewer.py --list-projects
+
+# Filter by billing account
+uv run gcp-bill-viewer.py --list-projects --billing-account 01234-ABCDEF-56789
+```
+
+### View Actual Billing Costs
+Requires BigQuery billing export to be configured (see Setup below).
+
+```bash
+# Last 30 days (default)
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789
+
+# Specific date range
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 \
+  --start-date 2025-01-01 --end-date 2025-01-31
+
+# Group by service (default)
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by service
+
+# Group by project
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by project
+
+# Group by day or month
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by day
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by month
+
+# Filter by project
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --project my-project-id
+
+# Export to CSV
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --format csv > costs.csv
+
+# Export to JSON
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --format json > costs.json
+
+# Debug mode (troubleshooting)
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --debug
+```
+
+### Debug Mode
+
+Use `--debug` flag to see detailed diagnostic information:
+
+```bash
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --debug
+```
+
+Debug output includes:
+- All datasets and tables found in your project
+- Table creation timestamp and elapsed time
+- Date range coverage of available billing data
+- Detailed error messages
 
 ### Authentication errors
 - Run `gcloud auth application-default login`
