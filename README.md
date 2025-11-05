@@ -18,6 +18,24 @@ Python-based tool to view GCP billing accounts, projects, and actual costs via B
   - Distinguishes between $0 bills and missing data
   - Debug mode for troubleshooting
 
+## Example
+```text
+/gcp-bill-viewer.py --costs --billing-account $BILLING_ID
+
+=== Billing Costs (2025-10-06 to 2025-11-05) ===
+
+Using BigQuery table: songbp.billing_export.gcp_billing_export_resource_v1_01EF07_000000_CCCCCC
++------------+--------+------------+
+| service    |   cost | currency   |
++============+========+============+
+| Vertex AI  |   0.14 | USD        |
++------------+--------+------------+
+| Gemini API |   0.06 | USD        |
++------------+--------+------------+
+
+Total: 0.20 USD
+```
+
 ## Prerequisites
 
 - Python 3.7+
