@@ -93,7 +93,7 @@ To retrieve actual cost data, you need to configure BigQuery billing export.
 
 ### Setup BigQuery Export
 
-Run the setup script - it will create the dataset and open your browser to the configuration page:
+Run the setup script for each project which you want to export billing data - it will create the dataset and open your browser to the configuration page:
 
 ```bash
 uv run setup_bigquery_export.py --setup \
