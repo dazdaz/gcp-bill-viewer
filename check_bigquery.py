@@ -218,13 +218,17 @@ def provide_recommendations(billing_export_found, billing_tables, project_id):
             print("\nYou can now query costs with:")
             for bt in billing_tables:
                 if bt['rows'] > 0:
-                    billing_id = bt['table'].replace('gcp_billing_export_v1_', '').replace('_', '-')
-                    # Try to format billing ID
-                    if len(billing_id) >= 18:
-                        formatted_id = f"{billing_id[:6]}-{billing_id[6:12]}-{billing_id[12:]}"
+                    # Remove the table prefix - handle both standard and resource export formats
+                    table_name = bt['table']
+                    if 'gcp_billing_export_resource_v1_' in table_name:
+                        billing_id = table_name.replace('gcp_billing_export_resource_v1_', '').replace('_', '-')
+                    elif 'gcp_billing_export_v1_' in table_name:
+                        billing_id = table_name.replace('gcp_billing_export_v1_', '').replace('_', '-')
                     else:
-                        formatted_id = billing_id
-                    print(f"  ./gcp-bill-viewer.py --costs --billing-account {formatted_id}")
+                        # Fallback: just replace underscores
+                        billing_id = table_name.replace('_', '-')
+                    
+                    print(f"  ./gcp-bill-viewer.py --costs --billing-account {billing_id}")
                     break
         else:
             youngest_table = min(billing_tables, key=lambda x: x['hours_ago'])
