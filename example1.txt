@@ -2,6 +2,8 @@
 BILLING_ID=$(./gcp-bill-viewer.py --list-accounts --format json | tail -n +3 | jq -r ".[0].id")
 PROJECT_ID=songbp
 
+gcloud auth application-default login
+
 ./setup_bigquery_export.py --billing-account $BILLING_ID --project $PROJECT_ID --setup
 
 # Run this 60 minutes later
