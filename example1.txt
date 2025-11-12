@@ -1,8 +1,11 @@
 #BILLING_ID=$(./gcp-bill-viewer.py --list-accounts --format csv | tail -n +3 | cut -d"," -f1)
-BILLING_ID=$(./gcp-bill-viewer.py --list-accounts --format json | tail -n +3 | jq -r ".[0].id")
+#BILLING_ID=$(./gcp-bill-viewer.py --list-accounts --format json | tail -n +3 | jq -r ".[0].id")
+BILLING_ID=$(gcloud billing accounts list --format="value(ACCOUNT_ID)" --limit=1)
 PROJECT_ID=songbp
 
 gcloud auth application-default login
+
+gcloud services enable bigquery.googleapis.com --project=$PROJECT_ID
 
 ./setup_bigquery_export.py --billing-account $BILLING_ID --project $PROJECT_ID --setup
 
