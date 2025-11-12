@@ -7,6 +7,8 @@ gcloud auth application-default login
 
 gcloud services enable bigquery.googleapis.com --project=$PROJECT_ID
 
+./grant-bq-access.sh
+
 ./setup_bigquery_export.py --billing-account $BILLING_ID --project $PROJECT_ID --setup
 
 # Run this 60 minutes later
