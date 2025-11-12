@@ -7,9 +7,14 @@ gcloud auth application-default login
 
 gcloud services enable bigquery.googleapis.com --project=$PROJECT_ID
 
-./grant-bq-access.sh
+# Assign the roles/bigquery.admin IAM role
+./grant-bq-access.sh setup user@your.org
+# This user should have roles/billing.costsManager rights (cost exports, budgets, and alerts), so you may need to use admin, in more restrictive environments
+./grant-bq-access.sh setup admin@your.org
 
 ./setup_bigquery_export.py --billing-account $BILLING_ID --project $PROJECT_ID --setup
+
+# Login via your browser to the user whom you've assigned the roles/bigquery.admin role to, so either user@your.org or admin@your.org
 
 # Run this 60 minutes later
 ./check_bigquery.py
