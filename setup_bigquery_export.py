@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
 import sys
 import warnings
 from typing import Optional
@@ -30,8 +31,20 @@ class BigQueryExportSetup:
         self.bq_client = None
 
     def _authenticate(self):
+        """
+        Authenticate using user credentials instead of service account credentials.
+        This temporarily unsets GOOGLE_APPLICATION_CREDENTIALS to prefer user credentials.
+        """
+        # Store the original value
+        original_creds = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+        
         try:
+            # Temporarily unset GOOGLE_APPLICATION_CREDENTIALS to use user credentials
+            if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
+                del os.environ['GOOGLE_APPLICATION_CREDENTIALS']
+            
             self.credentials, self.default_project_id = default()
+            
         except (DefaultCredentialsError, RefreshError) as e:
             print("Error: Not authenticated with Google Cloud.")
             print(f"\nDetails: {e}")
@@ -41,6 +54,10 @@ class BigQueryExportSetup:
             print("\nIf you see 'Reauthentication is needed', run:")
             print("  gcloud auth application-default login")
             sys.exit(1)
+        finally:
+            # Restore the original value
+            if original_creds is not None:
+                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = original_creds
 
     def setup_export(
         self,
@@ -60,17 +77,17 @@ class BigQueryExportSetup:
         print("Step 1: Verifying project access...")
         try:
             datasets = list(self.bq_client.list_datasets(max_results=1))
-            print(f"  ✓ Project '{project_id}' verified (BigQuery access confirmed)")
+            print(f"  ‚úì Project '{project_id}' verified (BigQuery access confirmed)")
         except exceptions.NotFound:
-            print(f"  ✗ Project '{project_id}' not found")
+            print(f"  ‚úó Project '{project_id}' not found")
             sys.exit(1)
         except exceptions.Forbidden:
-            print(f"  ✗ Access denied to project '{project_id}'")
+            print(f"  ‚úó Access denied to project '{project_id}'")
             print("  - Check that you have permissions on this project")
             print("  - Verify BigQuery API is enabled")
             sys.exit(1)
         except Exception as e:
-            print(f"  ✗ Error accessing project: {e}")
+            print(f"  ‚úó Error accessing project: {e}")
             print("\nTrying to enable BigQuery API...")
             print(f"  Run: gcloud services enable bigquery.googleapis.com --project={project_id}")
             sys.exit(1)
@@ -82,7 +99,7 @@ class BigQueryExportSetup:
         
         try:
             dataset = self.bq_client.create_dataset(dataset, exists_ok=True)
-            print(f"  ✓ Dataset '{dataset_name}' created/verified in {location}")
+            print(f"  ‚úì Dataset '{dataset_name}' created/verified in {location}")
             print(f"    Full dataset ID: {dataset_id}")
             
             existing_tables = list(self.bq_client.list_tables(dataset_name))
@@ -95,7 +112,7 @@ class BigQueryExportSetup:
                 
             print(f"    View dataset: https://console.cloud.google.com/bigquery?project={project_id}&ws=!1m4!1m3!3m2!1s{project_id}!2s{dataset_name}")
         except Exception as e:
-            print(f"  ✗ Error creating dataset: {e}")
+            print(f"  ‚úó Error creating dataset: {e}")
             print("\nCommon issues:")
             print("  - Insufficient permissions (need bigquery.datasets.create)")
             print("  - BigQuery API not enabled on project")
@@ -104,7 +121,7 @@ class BigQueryExportSetup:
             sys.exit(1)
         
         print("\nStep 3: Configuring billing export...")
-        print("  ⚠ IMPORTANT: Billing export MUST be configured via GCP Console")
+        print("  ‚ö† IMPORTANT: Billing export MUST be configured via GCP Console")
         print("  This is a Google Cloud Platform limitation - no API exists for this.")
         print("")
         print("=" * 70)
@@ -122,9 +139,9 @@ class BigQueryExportSetup:
         print(f"  3. Under 'Detailed usage cost', click 'EDIT SETTINGS'")
         print("")
         print(f"  4. In the form that opens:")
-        print(f"     • Enable: Toggle to ON")
-        print(f"     • Project dropdown: Select '{project_id}'")
-        print(f"     • Dataset dropdown: Select '{dataset_name}' (already exists!)")
+        print(f"     ‚Ä¢ Enable: Toggle to ON")
+        print(f"     ‚Ä¢ Project dropdown: Select '{project_id}'")
+        print(f"     ‚Ä¢ Dataset dropdown: Select '{dataset_name}' (already exists!)")
         print("")
         print(f"  5. Click 'SAVE'")
         print("")
@@ -140,18 +157,23 @@ class BigQueryExportSetup:
         try:
             print(f"Attempting to open browser automatically...")
             webbrowser.open(console_url)
-            print(f"✓ Browser opened to billing export configuration page")
+            print(f"‚úì Browser opened to billing export configuration page")
         except Exception as e:
-            print(f"✗ Could not open browser automatically")
+            print(f"‚úó Could not open browser automatically")
             print(f"  Please manually open: {console_url}")
         
         print("")
-        input("Press ENTER after you have completed the configuration in the Console...")
-        
-        print("\nVerifying configuration...")
-        import time
-        print("Waiting 10 seconds for GCP to create the export table...")
-        time.sleep(10)
+        try:
+            input("Press ENTER after you have completed the configuration in the Console...")
+            
+            print("\nVerifying configuration...")
+            import time
+            print("Waiting 10 seconds for GCP to create the export table...")
+            time.sleep(10)
+        except EOFError:
+            print("Running in non-interactive mode - skipping verification...")
+            print("You can verify the export later once you've configured it in the Console.")
+            import time
         
         clean_billing_id = billing_account_id.replace('-', '_')
         expected_table = f"gcp_billing_export_v1_{clean_billing_id}"
@@ -162,11 +184,11 @@ class BigQueryExportSetup:
             for table in tables:
                 if expected_table in table.table_id:
                     table_found = True
-                    print(f"✓ Billing export table created: {table.table_id}")
+                    print(f"‚úì Billing export table created: {table.table_id}")
                     break
             
             if not table_found:
-                print(f"⚠ Table '{expected_table}' not found yet")
+                print(f"‚ö† Table '{expected_table}' not found yet")
                 print("  This is normal - the table may take a few minutes to appear")
                 print("  You can verify later by running:")
                 print(f"    bq ls {project_id}:{dataset_name}")
@@ -203,10 +225,10 @@ class BigQueryExportSetup:
         self.bq_client = bigquery.Client(credentials=self.credentials, project=project_id)
         
         print("Step 1: Disabling billing export...")
-        print("  ⚠ Note: Billing export must be disabled via GCP Console")
+        print("  ‚ö† Note: Billing export must be disabled via GCP Console")
         print("\n  Manual steps required:")
         print(f"  1. Go to: https://console.cloud.google.com/billing/{billing_account_id}")
-        print("  2. Navigate to 'Billing export' → 'BigQuery export'")
+        print("  2. Navigate to 'Billing export' ‚Üí 'BigQuery export'")
         print("  3. Click 'EDIT SETTINGS' for 'Detailed usage cost'")
         print("  4. Click 'DISABLE EXPORT'")
         print("  5. Click 'SAVE'")
@@ -221,9 +243,9 @@ class BigQueryExportSetup:
                     delete_contents=True,
                     not_found_ok=True
                 )
-                print(f"  ✓ Dataset '{dataset_name}' deleted")
+                print(f"  ‚úì Dataset '{dataset_name}' deleted")
             except Exception as e:
-                print(f"  ✗ Error deleting dataset: {e}")
+                print(f"  ‚úó Error deleting dataset: {e}")
                 print(f"\nTo delete manually:")
                 print(f"  bq rm -r -f -d {dataset_id}")
         else:
