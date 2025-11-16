@@ -171,6 +171,123 @@ class GCPBillingViewer:
         
         return None
 
+    def _get_ai_category_sql(self, group_by: str) -> str:
+        """Generate SQL for AI service categorization"""
+        if group_by == 'ai':
+            return """
+            CASE 
+                -- Gemini Pro models
+                WHEN LOWER(service.description) LIKE '%vertex ai%' AND (
+                    (LOWER(labels.value) LIKE '%gemini%' AND LOWER(labels.value) LIKE '%pro%') OR
+                    LOWER(labels.value) LIKE '%gemini-1.5-pro%' OR
+                    LOWER(labels.value) LIKE '%gemini-pro%'
+                ) THEN 'Gemini 1.5 Pro'
+                
+                -- Gemini Flash models
+                WHEN LOWER(service.description) LIKE '%vertex ai%' AND (
+                    (LOWER(labels.value) LIKE '%gemini%' AND LOWER(labels.value) LIKE '%flash%') OR
+                    LOWER(labels.value) LIKE '%gemini-1.5-flash%' OR
+                    LOWER(labels.value) LIKE '%gemini-flash%'
+                ) THEN 'Gemini 1.5 Flash'
+                
+                -- Gemini Pro Vision models
+                WHEN LOWER(service.description) LIKE '%vertex ai%' AND (
+                    (LOWER(labels.value) LIKE '%gemini%' AND LOWER(labels.value) LIKE '%vision%') OR
+                    LOWER(labels.value) LIKE '%gemini-1.5-pro-vision%' OR
+                    LOWER(labels.value) LIKE '%gemini-pro-vision%'
+                ) THEN 'Gemini 1.5 Pro Vision'
+                
+                -- Gemini Ultra models
+                WHEN LOWER(service.description) LIKE '%vertex ai%' AND (
+                    LOWER(labels.value) LIKE '%gemini%' AND LOWER(labels.value) LIKE '%ultra%' OR
+                    LOWER(labels.value) LIKE '%gemini-ultra%'
+                ) THEN 'Gemini Ultra'
+                
+                -- Gemini Code models
+                WHEN LOWER(service.description) LIKE '%vertex ai%' AND (
+                    LOWER(labels.value) LIKE '%gemini%' AND LOWER(labels.value) LIKE '%code%' OR
+                    LOWER(labels.value) LIKE '%gemini-code%'
+                ) THEN 'Gemini Code'
+                
+                -- General Gemini models (when specific version unclear)
+                WHEN LOWER(service.description) LIKE '%vertex ai%' AND (
+                    LOWER(labels.value) LIKE '%gemini%' AND NOT (
+                        LOWER(labels.value) LIKE '%pro%' OR 
+                        LOWER(labels.value) LIKE '%flash%' OR 
+                        LOWER(labels.value) LIKE '%vision%' OR 
+                        LOWER(labels.value) LIKE '%ultra%' OR
+                        LOWER(labels.value) LIKE '%code%'
+                    )
+                ) THEN 'Gemini (Other Models)'
+                
+                -- Vertex AI - Cirp2
+                WHEN LOWER(service.description) LIKE '%vertex ai%' AND (
+                    LOWER(labels.value) LIKE '%cirp2%' OR 
+                    LOWER(labels.value) LIKE '%cirp 2%'
+                ) THEN 'Vertex AI - Cirp2'
+                
+                -- Vertex AI - Chirp3  
+                WHEN LOWER(service.description) LIKE '%vertex ai%' AND (
+                    LOWER(labels.value) LIKE '%chirp3%' OR 
+                    LOWER(labels.value) LIKE '%chirp 3%'
+                ) THEN 'Vertex AI - Chirp3'
+                
+                -- Vertex AI - Computer Use
+                WHEN LOWER(service.description) LIKE '%vertex ai%' AND (
+                    LOWER(labels.value) LIKE '%computer use%' OR 
+                    LOWER(labels.value) LIKE '%computer%'
+                ) THEN 'Vertex AI - Computer Use'
+                
+                -- Vertex AI - Other Models
+                WHEN LOWER(service.description) LIKE '%vertex ai%' THEN 'Vertex AI - Other Models'
+                
+                -- AI Platform (legacy)
+                WHEN LOWER(service.description) LIKE '%ai platform%' THEN 'AI Platform (Legacy)'
+                
+                -- AutoML
+                WHEN LOWER(service.description) LIKE '%automl%' THEN 'AutoML'
+                
+                -- Other AI/ML services
+                WHEN LOWER(service.description) LIKE '%machine learning%' OR 
+                     LOWER(service.description) LIKE '%ml%' THEN 'Machine Learning'
+                
+                -- Natural Language API
+                WHEN LOWER(service.description) LIKE '%natural language%' THEN 'Natural Language API'
+                
+                -- Speech-to-Text / Text-to-Speech
+                WHEN LOWER(service.description) LIKE '%speech%' THEN 'Speech Services'
+                
+                -- Vision API
+                WHEN LOWER(service.description) LIKE '%vision%' THEN 'Vision API'
+                
+                -- Translation API
+                WHEN LOWER(service.description) LIKE '%translation%' THEN 'Translation API'
+                
+                ELSE 'Non-AI Services'
+            END
+            """
+        elif group_by == 'model':
+            # For model-level grouping, we'll use a simpler approach that shows both service and model
+            return """
+            CONCAT(
+                CASE 
+                    WHEN LOWER(service.description) LIKE '%vertex ai%' THEN 'Vertex AI'
+                    WHEN LOWER(service.description) LIKE '%ai platform%' THEN 'AI Platform'
+                    WHEN LOWER(service.description) LIKE '%automl%' THEN 'AutoML'
+                    WHEN LOWER(service.description) LIKE '%natural language%' THEN 'NL API'
+                    WHEN LOWER(service.description) LIKE '%speech%' THEN 'Speech API'
+                    WHEN LOWER(service.description) LIKE '%vision%' THEN 'Vision API'
+                    WHEN LOWER(service.description) LIKE '%translation%' THEN 'Translate API'
+                    WHEN LOWER(service.description) LIKE '%machine learning%' THEN 'ML'
+                    ELSE service.description
+                END,
+                ' - ',
+                COALESCE(labels.value, 'Unknown Model')
+            )
+            """
+        else:
+            return 'service.description'
+    
     def get_costs_from_bigquery(
         self,
         billing_account_id: str,
@@ -235,25 +352,32 @@ class GCPBillingViewer:
             print(f"\nData available from: {date_range_info['min_date']} to {date_range_info['max_date']}")
             print(f"Requested range: {start_date} to {end_date}")
         
-        group_fields = {
-            'service': 'service.description',
-            'project': 'project.id',
-            'day': 'DATE(usage_start_time)',
-            'month': 'FORMAT_DATE("%Y-%m", usage_start_time)'
-        }
-        
-        group_field = group_fields.get(group_by, 'service.description')
-        group_label = group_by
-        
-        query = f"""
-        SELECT
-            {group_field} as category,
-            ROUND(SUM(cost), 2) as total_cost,
-            currency
-        FROM `{table_id}`
-        WHERE usage_start_time >= TIMESTAMP('{start_date}')
-            AND usage_start_time < TIMESTAMP('{end_date}')
-        """
+        # For AI and model grouping, we need to handle labels which may not always be present
+        if group_by in ['ai', 'model']:
+            group_field = self._get_ai_category_sql(group_by)
+            group_label = group_by
+            query = f"""
+            SELECT
+                {group_field} as category,
+                ROUND(SUM(cost), 2) as total_cost,
+                currency
+            FROM `{table_id}`
+            LEFT JOIN UNNEST(labels) AS labels
+            WHERE usage_start_time >= TIMESTAMP('{start_date}')
+                AND usage_start_time < TIMESTAMP('{end_date}')
+            """
+        else:
+            group_field = 'service.description'
+            group_label = 'service'
+            query = f"""
+            SELECT
+                {group_field} as category,
+                ROUND(SUM(cost), 2) as total_cost,
+                currency
+            FROM `{table_id}`
+            WHERE usage_start_time >= TIMESTAMP('{start_date}')
+                AND usage_start_time < TIMESTAMP('{end_date}')
+            """
         
         if project_filter:
             query += f" AND project.id = '{project_filter}'"
@@ -410,7 +534,12 @@ Examples:
   %(prog)s --list-projects --billing-account 01234-ABCDEF-56789
   %(prog)s --costs --billing-account 01234-ABCDEF-56789
   %(prog)s --costs --billing-account 01234-ABCDEF-56789 --start-date 2025-01-01 --group-by service
-  %(prog)s --costs --billing-account 01234-ABCDEF-56789 --format csv > costs.csv
+  %(prog)s --costs --billing-account 01234-ABCDEF-56789 --group-by ai
+  %(prog)s --costs --billing-account 01234-ABCDEF-56789 --group-by model
+  %(prog)s --costs --billing-account 01234-ABCDEF-56789 --group-by ai --format csv > ai_usage.csv
+  %(prog)s --costs --billing-account 01234-ABCDEF-56789 --group-by model --format csv > gemini_models.csv
+  %(prog)s --costs --billing-account 01234-ABCDEF-56789 --group-by ai --debug
+  %(prog)s --costs --billing-account 01234-ABCDEF-56789 --group-by model --debug
         """
     )
     
@@ -429,7 +558,7 @@ Examples:
     parser.add_argument('--end-date', type=str,
                         help='End date for cost analysis (YYYY-MM-DD)')
     parser.add_argument('--group-by', type=str, 
-                        choices=['service', 'project', 'day', 'month'],
+                        choices=['service', 'project', 'day', 'month', 'ai', 'model'],
                         default='service',
                         help='Group costs by dimension (default: service)')
     parser.add_argument('--format', type=str,

@@ -265,13 +265,18 @@ uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --debug
 
 ## AI Usage Tracking
 
-The enhanced billing viewer includes specialized AI usage tracking that categorizes AI and ML services to provide detailed insights into your AI spending patterns.
+The enhanced billing viewer includes specialized AI usage tracking that provides deep insights into your AI spending patterns with two levels of granularity:
 
-### AI Service Categories
+### AI Service Categories (`--group-by ai`)
 
 When using `--group-by ai`, costs are categorized into:
 
-- **Vertex AI - Generative AI**: Gemini models, text generation, chat services
+- **Gemini 1.5 Pro/Provisional**: Gemini Pro models, gemini-1.5-pro
+- **Gemini 1.5 Flash**: Gemini Flash models, gemini-1.5-flash
+- **Gemini 1.5 Pro Vision**: Gemini Pro Vision models, gemini1provisional-vision
+- **Gemini Ultra**: Gemini Ultra models, gemini-ultra
+- **Gemini Code**: Gemini Code models, gemini-code
+- **Gemini (Other Models)**: General Gemini models without specific version
 - **Vertex AI - Cirp2**: Specific Cirp2 model usage tracking
 - **Vertex AI - Chirp3**: Specific Chirp3 model usage tracking
 - **Vertex AI - Computer Use**: Computer use model services
@@ -285,14 +290,27 @@ When using `--group-by ai`, costs are categorized into:
 - **Translation API**: Language translation services
 - **Non-AI Services**: All non-AI services for comparison
 
+### Model-Level Breakdown (`--group-by model`)
+
+When using `--group-by model`, you'll get maximum granularity showing:
+- **Service - Model combinations**: Vertex AI - gemini-1.5-pro, Vertex AI - cirp2, etc.
+- **Unknown Model tracking**: For services without specific model identification
+- **Full model visibility**: See exactly which models were used and their individual costs
+
 ### AI Usage Examples
 
 ```bash
-# View detailed AI usage breakdown
+# View detailed AI usage breakdown by service type
 uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai
 
+# View maximum model-level granularity (shows exact models used)
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by model
+
 # Export AI usage data to CSV for analysis
-uv run gcp-bill-viewer.py --costs --billing-account 0123-ABCDEF-56789 --group-by ai --format csv > ai_usage.csv
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai --format csv > ai_usage.csv
+
+# Export specific Gemini model usage
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by model --format csv > gemini_models.csv
 
 # Filter AI usage by date range
 uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai --start-date 2025-01-01 --end-date 2025-01-31
@@ -300,17 +318,63 @@ uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-b
 # Debug AI categorization (shows detailed diagnostic info)
 uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai --debug
 
+# Debug model-level analysis (shows specific model detection)
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by model --debug
+
 # Filter AI usage by specific project
 uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai --project my-ai-project
+
+# Compare costs between different Gemini models
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by model --format csv > model_comparison.csv
+```
+
+### Expected Output Examples
+
+**AI Service Grouping (`--group-by ai`):**
+```
++----------------------+--------+------------+
+| ai                   |   cost | currency   |
++======================+========+============+
+| Gemini 1.5 Pro       |  12.45 | USD        |
++----------------------+--------+------------+
+| Vertex AI - Cirp2    |   8.32 | USD        |
++----------------------+--------+------------+
+| Gemini 1.5 Flash     |   4.67 | USD        |
++----------------------+--------+------------+
+| Vision API           |   2.10 | USD        |
++----------------------+--------+------------+
+| Machine Learning     |   1.50 | USD        |
++----------------------+--------+------------+
+| Non-AI Services      | 156.90 | USD        |
++----------------------+--------+------------+
+```
+
+**Model-Level Grouping (`--group-by model`):**
+```
++--------------------------------+--------+------------+
+| model                          |   cost | currency   |
++================================+========+============+
+| Vertex AI - gemini-1.5-pro     |  12.45 | USD        |
++--------------------------------+--------+------------+
+| Vertex AI - cirp2              |   8.32 | USD        |
++--------------------------------+--------+------------+
+| Vertex AI - gemini-1.5-flash   |   4.67 | USD        |
++--------------------------------+--------+------------+
+| Vision API - Unknown Model     |   2.10 | USD        |
++--------------------------------+--------+------------+
+| Compute Engine - Unknown Model | 156.90 | USD        |
++--------------------------------+--------+------------+
 ```
 
 ### AI Tracking Benefits
 
-- **Cost Optimization**: Track spending on specific AI models like Cirp2, Chirp3, and computer use
-- **Usage Patterns**: Identify which AI services drive the most costs
-- **Model Comparison**: Compare costs between different AI model categories
+- **Model-Specific Cost Analysis**: Track spending on exact Gemini models (1.5 Pro, 1.5 Flash, Ultra, etc.)
+- **Cost Optimization**: Identify which AI models drive the most costs
+- **Usage Patterns**: Compare costs between different AI model categories
 - **Budget Management**: Set AI-specific budgets based on detailed breakdowns
+- **Performance vs Cost Analysis**: Balance model performance with cost efficiency
 - **Compliance**: Monitor AI usage for governance and compliance requirements
+- **Future Planning**: Plan for model upgrades or migrations based on cost patterns
 
 ## Debug Mode
 
