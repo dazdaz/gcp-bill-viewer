@@ -11,6 +11,7 @@ Python-based tool to view GCP billing accounts, projects, and actual costs via B
 - Multiple output formats: table, CSV, JSON
 - Cross-platform date handling
 - Automatic BigQuery export detection
+- **AI Usage Tracking**: Detailed breakdown of Vertex AI services, Chirp2, Chirp3, and computer use models
 - Intelligent diagnostics:
   - Detects if billing export table exists
   - Checks when table was created and calculates wait time
@@ -20,20 +21,23 @@ Python-based tool to view GCP billing accounts, projects, and actual costs via B
 
 ## Example
 ```text
-./gcp-bill-viewer.py --costs --billing-account $BILLING_ID
++----------------+--------+------------+
+| service        |   cost | currency   |
++================+========+============+
+| Compute Engine |   5.92 | USD        |
++----------------+--------+------------+
+| Cloud Storage  |   3.01 | USD        |
++----------------+--------+------------+
+| Networking     |   0.4  | USD        |
++----------------+--------+------------+
+| Gemini API     |   0.09 | USD        |
++----------------+--------+------------+
+| BigQuery       |   0    | USD        |
++----------------+--------+------------+
+| Cloud Logging  |   0    | USD        |
++----------------+--------+------------+
 
-=== Billing Costs (2025-10-06 to 2025-11-05) ===
-
-Using BigQuery table: songbp.billing_export.gcp_billing_export_resource_v1_01EF07_000000_CCCCCC
-+------------+--------+------------+
-| service    |   cost | currency   |
-+============+========+============+
-| Vertex AI  |   0.14 | USD        |
-+------------+--------+------------+
-| Gemini API |   0.06 | USD        |
-+------------+--------+------------+
-
-Total: 0.20 USD
+Total: 9.42 USD
 ```
 
 ## Prerequisites
@@ -237,6 +241,15 @@ uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-b
 uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by day
 uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by month
 
+# Group by AI services (new feature)
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai
+
+# Export AI usage to CSV
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai --format csv > ai_usage.csv
+
+# Debug AI categorization
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai --debug
+
 # Filter by project
 uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --project my-project-id
 
@@ -250,7 +263,56 @@ uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --format 
 uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --debug
 ```
 
-### Debug Mode
+## AI Usage Tracking
+
+The enhanced billing viewer includes specialized AI usage tracking that categorizes AI and ML services to provide detailed insights into your AI spending patterns.
+
+### AI Service Categories
+
+When using `--group-by ai`, costs are categorized into:
+
+- **Vertex AI - Generative AI**: Gemini models, text generation, chat services
+- **Vertex AI - Cirp2**: Specific Cirp2 model usage tracking
+- **Vertex AI - Chirp3**: Specific Chirp3 model usage tracking
+- **Vertex AI - Computer Use**: Computer use model services
+- **Vertex AI - Other Models**: General Vertex AI services and models
+- **AI Platform (Legacy)**: Legacy AI Platform services
+- **AutoML**: Automated machine learning services
+- **Machine Learning**: General ML services and platforms
+- **Natural Language API**: Text analysis and sentiment analysis
+- **Speech Services**: Speech-to-text and text-to-speech
+- **Vision API**: Image and video analysis services
+- **Translation API**: Language translation services
+- **Non-AI Services**: All non-AI services for comparison
+
+### AI Usage Examples
+
+```bash
+# View detailed AI usage breakdown
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai
+
+# Export AI usage data to CSV for analysis
+uv run gcp-bill-viewer.py --costs --billing-account 0123-ABCDEF-56789 --group-by ai --format csv > ai_usage.csv
+
+# Filter AI usage by date range
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai --start-date 2025-01-01 --end-date 2025-01-31
+
+# Debug AI categorization (shows detailed diagnostic info)
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai --debug
+
+# Filter AI usage by specific project
+uv run gcp-bill-viewer.py --costs --billing-account 01234-ABCDEF-56789 --group-by ai --project my-ai-project
+```
+
+### AI Tracking Benefits
+
+- **Cost Optimization**: Track spending on specific AI models like Cirp2, Chirp3, and computer use
+- **Usage Patterns**: Identify which AI services drive the most costs
+- **Model Comparison**: Compare costs between different AI model categories
+- **Budget Management**: Set AI-specific budgets based on detailed breakdowns
+- **Compliance**: Monitor AI usage for governance and compliance requirements
+
+## Debug Mode
 
 Use `--debug` flag to see detailed diagnostic information:
 
@@ -264,17 +326,17 @@ Debug output includes:
 - Date range coverage of available billing data
 - Detailed error messages
 
-### Authentication errors
+## Authentication errors
 - Run `gcloud auth application-default login`
 - Verify credentials are valid: `gcloud auth list`
 - If you see "Reauthentication is needed", your credentials have expired - re-run the login command
 - Set a quota project if needed: `gcloud auth application-default set-quota-project YOUR_PROJECT_ID`
 
-### Python version warning
+## Python version warning
 - The warning about Python 3.10 reaching end-of-life is suppressed automatically
 - Consider upgrading to Python 3.11+ for continued support
 
-### General troubleshooting
+## General troubleshooting
 Always run with `--debug` flag first:
 ```bash
 uv run gcp-bill-viewer.py --costs --billing-account YOUR_ACCOUNT_ID --debug
